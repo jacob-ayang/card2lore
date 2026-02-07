@@ -1,19 +1,21 @@
 import { parseInputFile } from './lib/card';
 import { downloadJson, getDownloadNames } from './lib/download';
 import { ParseError } from './lib/png';
-import { convertCharacterBookToLegacy } from './lib/transform';
-import type { CharacterBook, LegacyWorldInfo } from './types';
+import { convertCharacterBookToLegacy, convertCharacterBookToRikkaHubNative } from './lib/transform';
+import type { CharacterBook, LegacyWorldInfo, RikkaHubLorebookExport } from './types';
 
 type AppState = {
   sourceName: string;
   raw: CharacterBook | null;
   legacy: LegacyWorldInfo | null;
+  rikkahubNative: RikkaHubLorebookExport | null;
 };
 
 const state: AppState = {
   sourceName: '',
   raw: null,
   legacy: null,
+  rikkahubNative: null,
 };
 
 function pretty(data: unknown): string {
@@ -50,6 +52,7 @@ function clearStats(root: HTMLElement): void {
 function setButtonsDisabled(root: HTMLElement, disabled: boolean): void {
   getById<HTMLButtonElement>(root, 'download-raw').disabled = disabled;
   getById<HTMLButtonElement>(root, 'download-legacy').disabled = disabled;
+  getById<HTMLButtonElement>(root, 'download-rikkahub').disabled = disabled;
   getById<HTMLButtonElement>(root, 'download-both').disabled = disabled;
   getById<HTMLButtonElement>(root, 'copy-raw').disabled = disabled;
   getById<HTMLButtonElement>(root, 'copy-legacy').disabled = disabled;
@@ -65,13 +68,20 @@ function updateOutput(root: HTMLElement, raw: CharacterBook, legacy: LegacyWorld
   getById<HTMLElement>(root, 'preview-legacy').textContent = pretty(legacy);
 }
 
-function setResult(root: HTMLElement, sourceName: string, raw: CharacterBook, legacy: LegacyWorldInfo): void {
+function setResult(
+  root: HTMLElement,
+  sourceName: string,
+  raw: CharacterBook,
+  legacy: LegacyWorldInfo,
+  rikkahubNative: RikkaHubLorebookExport,
+): void {
   const entryCount = raw.entries.length;
   const bookName = raw.name?.trim() || '(未命名世界书)';
 
   state.sourceName = sourceName;
   state.raw = raw;
   state.legacy = legacy;
+  state.rikkahubNative = rikkahubNative;
 
   updateOutput(root, raw, legacy);
   setStats(root, sourceName, bookName, entryCount);
@@ -80,7 +90,7 @@ function setResult(root: HTMLElement, sourceName: string, raw: CharacterBook, le
   if (entryCount === 0) {
     setMessage(root, '解析成功：检测到世界书，但 entries 为 0。仍可下载。', 'warn');
   } else {
-    setMessage(root, '解析成功：已生成 raw 与 legacy 两份 JSON。', 'ok');
+    setMessage(root, '解析成功：已生成 raw / legacy / RikkaHub native 三种 JSON。', 'ok');
   }
 }
 
@@ -88,6 +98,7 @@ function clearResult(root: HTMLElement, message: string, tone: 'idle' | 'warn' |
   state.sourceName = '';
   state.raw = null;
   state.legacy = null;
+  state.rikkahubNative = null;
   resetOutput(root);
   clearStats(root);
   setButtonsDisabled(root, true);
@@ -110,6 +121,15 @@ function downloadLegacy(): void {
 
   const names = getDownloadNames(state.sourceName);
   downloadJson(names.legacy, state.legacy);
+}
+
+function downloadRikkaHubNative(): void {
+  if (!state.rikkahubNative || !state.sourceName) {
+    return;
+  }
+
+  const names = getDownloadNames(state.sourceName);
+  downloadJson(names.rikkahub, state.rikkahubNative);
 }
 
 async function copyText(text: string): Promise<void> {
@@ -142,7 +162,9 @@ async function handleFile(root: HTMLElement, file: File): Promise<void> {
     setMessage(root, '正在解析角色卡，请稍候...', 'idle');
     const { sourceName, characterBook } = await parseInputFile(file);
     const legacy = convertCharacterBookToLegacy(characterBook);
-    setResult(root, sourceName, characterBook, legacy);
+    const fallbackName = sourceName.replace(/\.[^.]+$/, '');
+    const rikkahubNative = convertCharacterBookToRikkaHubNative(characterBook, fallbackName);
+    setResult(root, sourceName, characterBook, legacy, rikkahubNative);
   } catch (error) {
     if (error instanceof ParseError) {
       clearResult(root, `解析失败 [${error.code}]：${error.message}`, 'error');
@@ -239,6 +261,10 @@ function wireDownloadButtons(root: HTMLElement): void {
     downloadLegacy();
   });
 
+  getById<HTMLButtonElement>(root, 'download-rikkahub').addEventListener('click', () => {
+    downloadRikkaHubNative();
+  });
+
   getById<HTMLButtonElement>(root, 'download-both').addEventListener('click', () => {
     downloadRaw();
     downloadLegacy();
@@ -261,7 +287,7 @@ export function createApp(root: HTMLElement): void {
       <section class="panel hero">
         <p class="eyebrow">Card2Lore</p>
         <h1>酒馆角色卡世界书导出器</h1>
-        <p class="lead">上传角色卡（JSON/PNG），提取 <code>character_book</code>，生成并下载 raw + legacy world_info 两份 JSON。</p>
+        <p class="lead">上传角色卡（JSON/PNG），提取 <code>character_book</code>，生成并下载 raw、legacy world_info、RikkaHub native 三种 JSON。</p>
       </section>
 
       <section class="panel upload-panel">
@@ -291,6 +317,7 @@ export function createApp(root: HTMLElement): void {
         <div class="actions">
           <button id="download-raw" disabled>下载 Raw JSON</button>
           <button id="download-legacy" disabled>下载 Legacy JSON</button>
+          <button id="download-rikkahub" disabled>下载 RikkaHub Native</button>
           <button id="download-both" disabled>下载两份</button>
         </div>
 

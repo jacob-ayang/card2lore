@@ -34,6 +34,40 @@ export type LegacyWorldInfo = {
   entries: Record<string, LegacyWorldInfoEntry>;
 };
 
+export type RikkaHubInjectionPosition =
+  | 'before_system_prompt'
+  | 'after_system_prompt'
+  | 'top_of_chat'
+  | 'bottom_of_chat'
+  | 'at_depth';
+
+export type RikkaHubRegexInjection = {
+  name: string;
+  enabled: boolean;
+  priority: number;
+  position: RikkaHubInjectionPosition;
+  content: string;
+  injectDepth: number;
+  keywords: string[];
+  useRegex: boolean;
+  caseSensitive: boolean;
+  scanDepth: number;
+  constantActive: boolean;
+};
+
+export type RikkaHubLorebook = {
+  name: string;
+  description: string;
+  enabled: boolean;
+  entries: RikkaHubRegexInjection[];
+};
+
+export type RikkaHubLorebookExport = {
+  version: 1;
+  type: 'lorebook';
+  data: RikkaHubLorebook;
+};
+
 export type LegacyWorldInfoEntry = {
   uid: number;
   key: string[];

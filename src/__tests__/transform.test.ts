@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { convertCharacterBookToLegacy } from '../lib/transform';
+import { convertCharacterBookToLegacy, convertCharacterBookToRikkaHubNative } from '../lib/transform';
 import type { CharacterBook } from '../types';
 
 describe('convertCharacterBookToLegacy', () => {
@@ -68,5 +68,75 @@ describe('convertCharacterBookToLegacy', () => {
     expect(entry.caseSensitive).toBeNull();
     expect(entry.scanDepth).toBeNull();
     expect(entry.triggers).toEqual([]);
+  });
+});
+
+describe('convertCharacterBookToRikkaHubNative', () => {
+  it('creates native lorebook export wrapper', () => {
+    const book: CharacterBook = {
+      name: 'My Book',
+      description: 'desc',
+      entries: [
+        {
+          keys: ['hero'],
+          content: 'bio',
+          comment: 'Character Memo',
+          insertion_order: 9,
+          enabled: true,
+          extensions: {
+            depth: 6,
+            scan_depth: 8,
+            case_sensitive: true,
+            position: 0,
+          },
+        },
+      ],
+    };
+
+    const result = convertCharacterBookToRikkaHubNative(book, 'fallback-name');
+
+    expect(result.version).toBe(1);
+    expect(result.type).toBe('lorebook');
+    expect(result.data.name).toBe('My Book');
+    expect(result.data.description).toBe('desc');
+    expect(result.data.entries).toHaveLength(1);
+    expect(result.data.entries[0]).toMatchObject({
+      name: 'Character Memo',
+      enabled: true,
+      priority: 9,
+      position: 'before_system_prompt',
+      content: 'bio',
+      injectDepth: 6,
+      keywords: ['hero'],
+      useRegex: false,
+      caseSensitive: true,
+      scanDepth: 8,
+      constantActive: false,
+    });
+  });
+
+  it('uses defaults and fallback name', () => {
+    const book: CharacterBook = {
+      entries: [
+        {
+          keys: [],
+          content: '',
+          position: 'after_char',
+        },
+      ],
+    };
+
+    const result = convertCharacterBookToRikkaHubNative(book, 'fallback-name');
+    expect(result.data.name).toBe('fallback-name');
+    expect(result.data.entries[0]).toMatchObject({
+      name: '',
+      enabled: true,
+      priority: 100,
+      position: 'after_system_prompt',
+      injectDepth: 4,
+      scanDepth: 4,
+      caseSensitive: false,
+      constantActive: false,
+    });
   });
 });

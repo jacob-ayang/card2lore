@@ -1,4 +1,12 @@
-import type { CharacterBook, CharacterBookEntry, LegacyWorldInfo, LegacyWorldInfoEntry } from '../types';
+import type {
+  CharacterBook,
+  CharacterBookEntry,
+  LegacyWorldInfo,
+  LegacyWorldInfoEntry,
+  RikkaHubInjectionPosition,
+  RikkaHubLorebookExport,
+  RikkaHubRegexInjection,
+} from '../types';
 
 function asStringArray(value: unknown, fallback: string[] = []): string[] {
   if (!Array.isArray(value)) {
@@ -95,4 +103,63 @@ export function convertCharacterBookToLegacy(book: CharacterBook): LegacyWorldIn
   }
 
   return { entries };
+}
+
+function mapLegacyPositionToRikkaHub(position: number): RikkaHubInjectionPosition {
+  switch (position) {
+    case 0:
+      return 'before_system_prompt';
+    case 1:
+      return 'after_system_prompt';
+    case 2:
+    case 3:
+      return 'top_of_chat';
+    case 4:
+      return 'at_depth';
+    default:
+      return 'after_system_prompt';
+  }
+}
+
+function mapEntryPositionToRikkaHub(entry: CharacterBookEntry): RikkaHubInjectionPosition {
+  const extPosition = getExt(entry, 'position');
+  if (typeof extPosition === 'number' && Number.isFinite(extPosition)) {
+    return mapLegacyPositionToRikkaHub(extPosition);
+  }
+  if (entry.position === 'before_char') {
+    return 'before_system_prompt';
+  }
+  return 'after_system_prompt';
+}
+
+function buildRikkaHubEntry(entry: CharacterBookEntry): RikkaHubRegexInjection {
+  const keywords = asStringArray(entry.keys);
+  const name = asString(entry.comment).trim() || keywords[0] || '';
+
+  return {
+    name,
+    enabled: asBoolean(entry.enabled, true),
+    priority: asNumber(entry.insertion_order, 100),
+    position: mapEntryPositionToRikkaHub(entry),
+    content: asString(entry.content),
+    injectDepth: asNumber(getExt(entry, 'depth'), 4),
+    keywords,
+    useRegex: false,
+    caseSensitive: asBoolean(getExt(entry, 'case_sensitive'), false),
+    scanDepth: asNumber(getExt(entry, 'scan_depth'), 4),
+    constantActive: asBoolean(entry.constant, false),
+  };
+}
+
+export function convertCharacterBookToRikkaHubNative(book: CharacterBook, fallbackName = ''): RikkaHubLorebookExport {
+  return {
+    version: 1,
+    type: 'lorebook',
+    data: {
+      name: asString(book.name).trim() || fallbackName || 'Imported Lorebook',
+      description: asString(book.description),
+      enabled: true,
+      entries: book.entries.map((entry) => buildRikkaHubEntry(entry)),
+    },
+  };
 }

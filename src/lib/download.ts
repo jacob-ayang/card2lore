@@ -4,11 +4,12 @@ export function sanitizeBaseName(filename: string): string {
   return clean || 'worldbook';
 }
 
-export function getDownloadNames(sourceName: string): { raw: string; legacy: string } {
+export function getDownloadNames(sourceName: string): { raw: string; legacy: string; rikkahub: string } {
   const base = sanitizeBaseName(sourceName);
   return {
     raw: `${base}.worldbook.raw.json`,
     legacy: `${base}.world_info.legacy.json`,
+    rikkahub: `${base}.rikkahub.lorebook.json`,
   };
 }
 
