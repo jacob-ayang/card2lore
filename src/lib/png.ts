@@ -29,20 +29,43 @@ function readUint32BE(data: Uint8Array, offset: number): number {
   ) >>> 0;
 }
 
-function decodeBase64(base64Text: string): string {
-  if (typeof atob === 'function') {
-    return atob(base64Text);
-  }
+function decodeBase64ToBytes(base64Text: string): Uint8Array {
+  const normalized = base64Text.replace(/\s+/g, '');
 
   const maybeBuffer = (globalThis as unknown as {
-    Buffer?: { from: (value: string, encoding: string) => { toString: (encoding: string) => string } };
+    Buffer?: { from: (value: string, encoding: string) => Uint8Array };
   }).Buffer;
 
   if (maybeBuffer) {
-    return maybeBuffer.from(base64Text, 'base64').toString('utf-8');
+    return Uint8Array.from(maybeBuffer.from(normalized, 'base64'));
+  }
+
+  if (typeof atob === 'function') {
+    const binary = atob(normalized);
+    const out = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      out[i] = binary.charCodeAt(i) & 0xff;
+    }
+    return out;
   }
 
   throw new ParseError('INVALID_JSON', 'Unable to decode base64 payload in this runtime.');
+}
+
+function decodeUtf8(bytes: Uint8Array): string {
+  if (typeof TextDecoder !== 'undefined') {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  }
+
+  const maybeBuffer = (globalThis as unknown as {
+    Buffer?: { from: (value: Uint8Array) => { toString: (encoding: string) => string } };
+  }).Buffer;
+
+  if (maybeBuffer) {
+    return maybeBuffer.from(bytes).toString('utf-8');
+  }
+
+  throw new ParseError('INVALID_JSON', 'Unable to decode UTF-8 payload in this runtime.');
 }
 
 export function extractCharaJsonFromPngBytes(data: Uint8Array): unknown {
@@ -83,7 +106,8 @@ export function extractCharaJsonFromPngBytes(data: Uint8Array): unknown {
           const textPayload = asAscii(chunkData.subarray(separatorIndex + 1));
 
           try {
-            return JSON.parse(decodeBase64(textPayload));
+            const utf8Json = decodeUtf8(decodeBase64ToBytes(textPayload));
+            return JSON.parse(utf8Json);
           } catch {
             throw new ParseError('INVALID_JSON', 'Found chara chunk but failed to parse JSON payload.');
           }

@@ -52,6 +52,18 @@ describe('parseInputFile', () => {
     expect(result.characterBook).toEqual(book);
   });
 
+  it('keeps utf-8 content when parsing JSON files', async () => {
+    const book: CharacterBook = {
+      name: '\u4e16\u754c\u89d2\u8272',
+      entries: [{ keys: ['\u57ce\u5e02'], content: '\u4f60\u597d\uff0c\u4e16\u754c\ud83d\ude80' }],
+    };
+    const card = { data: { character_book: book } };
+    const file = new File([JSON.stringify(card)], 'utf8.json', { type: 'application/json' });
+
+    const result = await parseInputFile(file);
+    expect(result.characterBook).toEqual(book);
+  });
+
   it('rejects unsupported extension', async () => {
     const file = new File(['{}'], 'demo.txt', { type: 'text/plain' });
 

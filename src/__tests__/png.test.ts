@@ -21,10 +21,27 @@ function makeChunk(type: string, data: Uint8Array): Uint8Array {
   return chunk;
 }
 
+function base64FromUtf8(input: string): string {
+  const maybeBuffer = (globalThis as unknown as {
+    Buffer?: { from: (value: string, encoding: string) => { toString: (encoding: string) => string } };
+  }).Buffer;
+
+  if (maybeBuffer) {
+    return maybeBuffer.from(input, 'utf-8').toString('base64');
+  }
+
+  const bytes = new TextEncoder().encode(input);
+  let binary = '';
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
 function buildPngWithChara(payload: unknown): Uint8Array {
   const signature = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const ihdr = makeChunk('IHDR', new Uint8Array(13));
-  const charaText = `chara\0${btoa(JSON.stringify(payload))}`;
+  const charaText = `chara\0${base64FromUtf8(JSON.stringify(payload))}`;
   const text = makeChunk('tEXt', bytesFromAscii(charaText));
   const iend = makeChunk('IEND', new Uint8Array());
 
@@ -46,6 +63,26 @@ describe('extractCharaJsonFromPngBytes', () => {
     const payload = { data: { character_book: { entries: [] } }, name: 'demo' };
     const png = buildPngWithChara(payload);
 
+    const result = extractCharaJsonFromPngBytes(png);
+    expect(result).toEqual(payload);
+  });
+
+  it('keeps utf-8 content in decoded payload', () => {
+    const payload = {
+      data: {
+        character_book: {
+          name: '\u4e16\u754c\u8bbe\u5b9a',
+          entries: [
+            {
+              keys: ['\u57ce\u5e02'],
+              content: '\u4eba\u7269\u540d\u5b57\uff1a\u674e\u96f7 \ud83d\ude80',
+            },
+          ],
+        },
+      },
+    };
+
+    const png = buildPngWithChara(payload);
     const result = extractCharaJsonFromPngBytes(png);
     expect(result).toEqual(payload);
   });
